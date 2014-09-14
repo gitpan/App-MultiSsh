@@ -17,11 +17,11 @@ name: App-MultiSsh
 provides:
   App::MultiSsh:
     file: lib/App/MultiSsh.pm
-    version: 0.01
+    version: 0.02
 requires:
   perl: 5.008
 resources:
   bugtracker: http://rt.cpan.org/NoAuth/Bugs.html?Dist=App::MultiSsh
   license: http://dev.perl.org/licenses/
   repository: git://github.com/ivanwills/App-MultiSsh.git
-version: 0.01
+version: 0.02

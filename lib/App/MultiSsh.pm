@@ -9,31 +9,122 @@ package App::MultiSsh;
 use strict;
 use warnings;
 use Carp;
-use Scalar::Util;
-use List::Util;
-#use List::MoreUtils;
 use Data::Dumper qw/Dumper/;
 use English qw/ -no_match_vars /;
 use base qw/Exporter/;
 
-
-our $VERSION     = 0.01;
-our @EXPORT_OK   = qw//;
+our $VERSION     = 0.02;
+our @EXPORT_OK   = qw/hosts_from_map is_host multi_run shell_quote/;
 our %EXPORT_TAGS = ();
-#our @EXPORT      = qw//;
 
-sub new {
-	my $caller = shift;
-	my $class  = ref $caller ? ref $caller : $caller;
-	my %param  = @_;
-	my $self   = \%param;
+sub hosts_from_map {
+    my ($map) = @_;
+    my @hosts;
 
-	bless $self, $class;
+    my $int_re       = qr/ [0-9a-zA-Z] /xms;
+    my $range_re     = qr/ ($int_re) (?:[.][.]|-) ($int_re)/xms;
+    my $group_re     = qr/ (?: $int_re | $range_re )       /xms;
+    my $seperated_re = qr/ $group_re (?: , $group_re )  *  /xms;
+    my $num_range_re = qr/ [[{] ( $seperated_re ) [\]}]    /xms;
 
-	return $self;
+    while ( my $host_range = shift @{$map} ) {
+        my ($num_range) = $host_range =~ /$num_range_re/;
+
+        if (!$num_range) {
+            push @hosts, $host_range;
+            next;
+            #if ( is_host($host_range) ) {
+            #    push @hosts, $host_range;
+            #    next;
+            #}
+            #else {
+            #    unshift @{$hosts}, $host_range;
+            #    last;
+            #}
+        }
+
+        my @numbs    = map { /$range_re/ ? ($1 .. $2) : ($_) } split /,/, $num_range;
+        my @hostmaps = map { $a=$host_range; $a =~ s/$num_range_re/$_/e; $a } @numbs;
+
+        if ( $hostmaps[0] =~ /$num_range_re/ ) {
+            push @{$map}, @hostmaps;
+        }
+        else {
+            push @hosts, @hostmaps;
+        }
+    }
+
+    return @hosts;
 }
 
+sub is_host {
+    my $full_name = `host $_[0]`;
+    return $full_name !~ /not found/;
+}
 
+sub shell_quote {
+    my ($text) = @_;
+
+    if ($text =~ /[\s$|><;&*?#]/xms) {
+        $text =~ s/'/'\\''/gxms;
+        $text = "'$text'";
+    }
+
+    return $text;
+}
+
+sub multi_run {
+    my ($hosts, $remote_cmd, $option) = @_;
+
+    # store child processes if forking
+    my @children;
+
+    # loop over each host and run the remote command
+    for my $host (@$hosts) {
+        my $cmd = "ssh $host " . shell_quote($remote_cmd);
+        print "$cmd\n" if $option->{verbose} || $option->{test};
+        next if $option->{test};
+
+        if ( $option->{parallel} ) {
+            my $child = fork;
+
+            if ( $child ) {
+                # parent stuff
+                push @children, $child;
+
+                if ( @children == $option->{parallel} ) {
+                    warn "Waiting for children to finish\n" if $option->{verbose} > 1;
+                    # reap children if reached max fork count
+                    while ( my $pid = shift @children ) {
+                        waitpid $pid, 0;
+                    }
+                }
+            }
+            elsif ( defined $child ) {
+                # child code
+                if ( $option->{interleave} ) {
+                    exec "$cmd 2>&1";
+                }
+                else {
+                    my $out = `$cmd 2>&1`;
+
+                    print "\n$cmd\n";
+                    print $out;
+                }
+                exit;
+            }
+            else {
+                die "Error: $!\n";
+            }
+        }
+        else {
+            system $cmd;
+        }
+    }
+
+    # reap any outstanding children
+    wait;
+}
 
 1;
 
@@ -45,7 +136,7 @@ App::MultiSsh - Multi host ssh executer
 
 =head1 VERSION
 
-This documentation refers to App::MultiSsh version 0.01
+This documentation refers to App::MultiSsh version 0.02
 
 =head1 SYNOPSIS
 
@@ -60,13 +151,21 @@ This documentation refers to App::MultiSsh version 0.01
 
 =head1 SUBROUTINES/METHODS
 
-=head3 C<new ( $search, )>
+=over 4
 
-Param: C<$search> - type (detail) - description
+=item C<hosts_from_map ($host)>
 
-Return: App::MultiSsh -
+Splits C<$host> into all hosts that it represents.
 
-Description:
+=item C<is_host ($host)>
+
+Gets the full name of C<$host>
+
+=item C<shell_quote ($text)>
+
+Quotes C<$text> for putting into a shell command
+
+=back
 
 =head1 DIAGNOSTICS
 
