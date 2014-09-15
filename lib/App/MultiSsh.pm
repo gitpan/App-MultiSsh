@@ -13,7 +13,7 @@ use Data::Dumper qw/Dumper/;
 use English qw/ -no_match_vars /;
 use base qw/Exporter/;
 
-our $VERSION     = 0.03;
+our $VERSION     = 0.04;
 our @EXPORT_OK   = qw/hosts_from_map is_host multi_run shell_quote/;
 our %EXPORT_TAGS = ();
 
@@ -136,7 +136,7 @@ App::MultiSsh - Multi host ssh executer
 
 =head1 VERSION
 
-This documentation refers to App::MultiSsh version 0.03
+This documentation refers to App::MultiSsh version 0.04
 
 =head1 SYNOPSIS
 
@@ -164,6 +164,10 @@ Gets the full name of C<$host>
 =item C<shell_quote ($text)>
 
 Quotes C<$text> for putting into a shell command
+
+=item C<multi_run ($hosts, $remote_cmd, $option)>
+
+Run the command on all hosts
 
 =back
 

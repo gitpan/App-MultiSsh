@@ -27,14 +27,16 @@
       },
       "runtime" : {
          "requires" : {
-            "perl" : "5.008"
+            "Path::Class" : "0",
+            "perl" : "5.008",
+            "version" : "0"
          }
       }
    },
    "provides" : {
       "App::MultiSsh" : {
          "file" : "lib/App/MultiSsh.pm",
-         "version" : "0.03"
+         "version" : "0.04"
       }
    },
    "release_status" : "stable",
@@ -49,5 +51,5 @@
          "url" : "git://github.com/ivanwills/App-MultiSsh.git"
       }
    },
-   "version" : "0.03"
+   "version" : "0.04"
 }

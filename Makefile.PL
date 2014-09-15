@@ -6,8 +6,10 @@ WriteMakefile
   'NAME' => 'App::MultiSsh',
   'VERSION_FROM' => 'lib/App/MultiSsh.pm',
   'PREREQ_PM' => {
+                   'Path::Class' => 0,
                    'Test::More' => 0,
-                   'Test::NoWarnings' => 0
+                   'Test::NoWarnings' => 0,
+                   'version' => 0
                  },
   'INSTALLDIRS' => 'site',
   'EXE_FILES' => [
