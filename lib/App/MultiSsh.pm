@@ -9,12 +9,13 @@ package App::MultiSsh;
 use strict;
 use warnings;
 use Carp;
+use POSIX qw/ceil/;
 use Data::Dumper qw/Dumper/;
 use English qw/ -no_match_vars /;
 use base qw/Exporter/;
 
-our $VERSION     = 0.04;
-our @EXPORT_OK   = qw/hosts_from_map is_host multi_run shell_quote/;
+our $VERSION     = '0.10';
+our @EXPORT_OK   = qw/hosts_from_map is_host multi_run shell_quote tmux/;
 our %EXPORT_TAGS = ();
 
 sub hosts_from_map {
@@ -76,6 +77,13 @@ sub shell_quote {
 sub multi_run {
     my ($hosts, $remote_cmd, $option) = @_;
 
+    if ($option->{tmux}) {
+        my @cmds = map {"ssh $_ " . shell_quote($remote_cmd)} @$hosts;
+        exec tmux(@cmds) if !$option->{test};
+        print tmux(@cmds) . "\n";
+        return;
+    }
+
     # store child processes if forking
     my @children;
 
@@ -126,6 +134,44 @@ sub multi_run {
     wait;
 }
 
+sub tmux {
+    my (@commands) = @_;
+
+    my $layout = layout(@commands);
+    my $tmux   = '';
+
+    for my $ssh (@commands) {
+        my $cmd = !$tmux   ? 'new-session' : '\\; split-window -d';
+
+        $tmux .= " $cmd " . shell_quote($ssh);
+    }
+
+    $tmux .= ' \\; set-window-option synchronize-panes on' if $commands[0] !~ /\s$/xms;
+
+    return "tmux$tmux \\; select-layout tiled";
+}
+
+sub layout {
+    my (@commands) = @_;
+    my $rows = int sqrt @commands + 1;
+    my $cols = ceil @commands / $rows;
+    my $out = [];
+    if ( $cols > $rows + 1 ) {
+        my $tmp = $rows;
+        $rows++;
+        $cols--;
+    }
+    ROW:
+    for my $row ( 0 .. $rows - 1 ) {
+        for my $col ( 0 .. $cols - 1 ) {
+            last ROW if !@commands;
+            $out->[$row][$col] = shift @commands;
+        }
+    }
+
+    return $out;
+}
+
 1;
 
 __END__
@@ -136,7 +182,7 @@ App::MultiSsh - Multi host ssh executer
 
 =head1 VERSION
 
-This documentation refers to App::MultiSsh version 0.04
+This documentation refers to App::MultiSsh version 0.10
 
 =head1 SYNOPSIS
 
@@ -168,6 +214,14 @@ Quotes C<$text> for putting into a shell command
 =item C<multi_run ($hosts, $remote_cmd, $option)>
 
 Run the command on all hosts
+
+=item C<tmux (@commands)>
+
+Generate a tmux session with all commands run in seppeate windows
+
+=item C<layout (@commands)>
+
+Generate a desired tmux layout
 
 =back
 

@@ -8,17 +8,16 @@
 
 use strict;
 use warnings;
-use version;
 use Getopt::Long;
 use Pod::Usage;
 use Data::Dumper qw/Dumper/;
 use English qw/ -no_match_vars /;
 use FindBin qw/$Bin/;
-use Path::Class;
+use Path::Tiny;
 use POSIX ":sys_wait_h";
 use App::MultiSsh qw/hosts_from_map is_host multi_run shell_quote/;
 
-our $VERSION = version->new('0.0.1');
+our $VERSION = '0.10';
 my ($name)   = $PROGRAM_NAME =~ m{^.*/(.*?)$}mxs;
 
 my %option = (
@@ -38,8 +37,8 @@ exit 0;
 
 sub main {
 
-    $option{cssh} = `which cssh`;
-    chomp $option{cssh};
+    $option{cssh_cmd} = which('cssh');
+    $option{tmux_cmd} = which('tmux');
 
     Getopt::Long::Configure('bundling');
     GetOptions(
@@ -47,7 +46,10 @@ sub main {
         'host|h=s@',
         'parallel|p=i',
         'fork|f',
-        'cssh|c=s',
+        'cssh|c',
+        'tmux|m',
+        'cssh_cmd=s',
+        'tmux_cmd=s',
         'interleave|i',
         'test|t!',
         'verbose|v+',
@@ -66,17 +68,24 @@ sub main {
     elsif ( $option{'help'} ) {
         pod2usage( -verbose => 1 );
     }
-    elsif ( !@ARGV && !( -x $option{cssh} ) ) {
-        warn "You must specify a command or install or specify the location of cssh!\n";
+    elsif ( !@ARGV && !( -x $option{cssh_cmd} || -x $option{tmux_cmd} ) ) {
+        warn "You must specify a command or install or specify the location of cssh or tmux!\n";
         pod2usage( -verbose => 1 );
     }
 
-    if ( !@ARGV ) {
+    # no command and not specified cssh or tmux
+    if ( !@ARGV && !($option{cssh} || $option{tmux}) ) {
+        # pick cssh or tmux
+        $option{cssh} = !!$option{cssh_cmd};
+        $option{tmux} = !!$option{tmux_cmd};
+    }
+
+    if ( !@ARGV && $option{cssh} ) {
         exec $option{cssh}, hosts_from_map($option{host});
     }
 
     # do stuff here
-    my $remote_cmd = pop @ARGV;
+    my $remote_cmd = pop @ARGV || '';
     #my $remote_cmd = join ' ', map {s{'}{'\\''}gxms; $_} @ARGV;
 
     if (@ARGV) {
@@ -98,6 +107,17 @@ sub main {
     return;
 }
 
+sub which {
+    my ($cmd) = @_;
+
+    for my $path (split /:/, $ENV{PATH}) {
+        next if !-d $path || !-x path($path, $cmd);
+        return path($path, $cmd);
+    }
+
+    return;
+}
+
 __DATA__
 
 =head1 NAME
@@ -106,14 +126,14 @@ mssh - Multi host ssh executer
 
 =head1 VERSION
 
-This documentation refers to mssh version 0.1.
+This documentation refers to mssh version 0.10.
 
 =head1 SYNOPSIS
 
    mssh [ --VERSION | --help | --man ]
    mssh [ -t | --test ] [ -v | --verbose ] -h host [-h host2 ..] 'remote command'
    mssh [ -t | --test ] [ -v | --verbose ] host [host2 ...] 'remote command'
-   mssh [ -t | --test ] [ -v | --verbose ] -h host [-h host2 ..]
+   mssh [ -t | --test ] [ -v | --verbose ] [-c|--cssh|-m|--tmux] -h host [-h host2 ..]
 
  OPTIONS:
   'remote command'
@@ -125,7 +145,7 @@ This documentation refers to mssh version 0.1.
                   seperated integer/letters or .. for a range of all values
                   from the first to last. Note if clusterssh (cssh) is
                   installed and no 'remote command' specified C<cssh> will
-                  be run
+                  be run, similarly if tmux is installed.
                   EG [0..5] for 1,2,3,4 and 5
                      [0,5]      1 and 5
                      [0..3,5]   1,2,3 and 5
@@ -144,6 +164,14 @@ This documentation refers to mssh version 0.1.
   -i --interleave When running parallel commands interleave the output of each host
   -t --test       Just show all the commands that would be run don't actually
                   run anything
+  -f --fork       Fork the ssh processes so they run in parallel (output may
+                  not be legible)
+  -c --cssh       Use cssh to run the ssh commands
+     --cssh-cmd[=]str
+                  Use str as the C<cssh> program (defaults to cssh found in $PATH)
+  -m --tmux       Create a tmux session with each window pane connecting to a host
+     --tmux-cmd[=]str
+                  Use str as the C<tmux> program (defaults to tmux found in $PATH)
 
   -v --verbose    Show more detailed option
      --VERSION    Prints the version information
